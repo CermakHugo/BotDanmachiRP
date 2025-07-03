@@ -1,0 +1,23 @@
+{
+  "name": "botdanmachirp",
+  "version": "1.0.0",
+  "description": "Un bot pour un Danmachi RP sur discord",
+  "main": "main.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CermakHugo/BotDanmachiRP.git"
+  },
+  "author": "Hugo CERMAK",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/CermakHugo/BotDanmachiRP/issues"
+  },
+  "homepage": "https://github.com/CermakHugo/BotDanmachiRP#readme",
+  "dependencies": {
+    "discord.js": "^14.21.0",
+    "fs": "^0.0.1-security"
+  }
+}
