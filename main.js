@@ -1,7 +1,8 @@
-import {Collection, IntentsBitField, Client} from 'discord.js';
+import {Collection, IntentsBitField, Client, Events, REST, Routes} from 'discord.js';
 import {loadCommands} from './loaders/loadCommands.js';
 import {sequelize} from './database.js';
 import 'dotenv/config';
+import { loadInteractions } from './loaders/loadInteractions.js';
 const intents = new IntentsBitField(process.env.INTENTS_BIT_FIELD);
 const bot = new Client({intents});
 
@@ -13,14 +14,31 @@ try {
 }
 
 bot.commands = new Collection();
-bot.login(process.env.TOKEN);
-loadCommands(bot);
 
-bot.on("messageCreate", async message =>{
-    if(message.content === "!ping") return bot.commands.get("ping").run(bot, message)
-})
+
+const rest = new REST().setToken(process.env.TOKEN);
+
+(async () => {
+    await loadCommands(bot);
+    try {
+        const commands = [...bot.commands.values()].map(command => {
+            return command.data.toJSON();
+        });
+        console.log(`Started refreshing ${commands.length} application (/) commands.`);
+        // The put method is used to fully refresh all commands in the guild with the current set
+        const data = await rest.put(Routes.applicationGuildCommands(process.env.BOT_ID, process.env.GUILD_ID), { body: commands });
+        console.log(`Successfully reloaded ${data.length} application (/) commands.`);
+    } catch (error) {
+            // And of course, make sure you catch and log any errors!
+            console.error(error);
+    }
+})();
+
+await loadInteractions(bot);
+
+
+await bot.login(process.env.TOKEN);
 
 bot.on('ready', async () => {
-
     console.log(`${bot.user.username} est en ligne.`)
 })
