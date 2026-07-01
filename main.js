@@ -1,12 +1,19 @@
-const discord = require('discord.js');
-const config = require('./config');
-const loadCommands = require('./loaders/loadCommands');
-const intents = new discord.IntentsBitField(53608447);
-const bot = new discord.Client({intents});
+import {Collection, IntentsBitField, Client} from 'discord.js';
+import {loadCommands} from './loaders/loadCommands.js';
+import {sequelize} from './database.js';
+import 'dotenv/config';
+const intents = new IntentsBitField(process.env.INTENTS_BIT_FIELD);
+const bot = new Client({intents});
 
-bot.commands = new discord.Collection();
+try {
+  await sequelize.authenticate();
+  console.log('Connection has been established successfully.');
+} catch (error) {
+  console.error('Unable to connect to the database:', error);
+}
 
-bot.login(config.token);
+bot.commands = new Collection();
+bot.login(process.env.TOKEN);
 loadCommands(bot);
 
 bot.on("messageCreate", async message =>{

@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Un bot pour un Danmachi RP sur discord",
   "main": "main.js",
+  "type": "module",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -17,7 +18,13 @@
   },
   "homepage": "https://github.com/CermakHugo/BotDanmachiRP#readme",
   "dependencies": {
-    "discord.js": "^14.21.0",
-    "fs": "^0.0.1-security"
+    "discord.js": "^14.26.4",
+    "dotenv": "^17.4.2",
+    "fs": "^0.0.1-security",
+    "mysql2": "^3.22.5",
+    "sequelize": "^6.37.8"
+  },
+  "overrides": {
+    "undici": "^7.0.0"
   }
 }

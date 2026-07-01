@@ -1,6 +1,6 @@
-const discord = require('discord.js');
+import 'discord.js';
 
-module.exports = {
+export const command = {
     name: 'ping',
     async run(bot, message) {
         await message.reply(`Ping : ${bot.ws.ping}`)

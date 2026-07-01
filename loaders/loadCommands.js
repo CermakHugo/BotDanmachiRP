@@ -1,8 +1,8 @@
-const fs = require('fs');
+import * as fs from 'fs';
 
-module.exports = async (bot) => {
+export const loadCommands = async (bot) => {
     fs.readdirSync('./commandes').filter(f => f.endsWith('.js')).forEach(async file => {
-        let command = require(`../commandes/${file}`)
+        const { command } = await import (`../commandes/${file}`)
         if(!command.name || typeof command.name !== "string") 
             throw new TypeError(`La commande ${file.slice(0, file.lenght-3)} n'a pas de nom`)
 
