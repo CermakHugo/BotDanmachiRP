@@ -2,6 +2,7 @@ import {Collection, IntentsBitField, Client, Events, REST, Routes} from 'discord
 import {loadCommands} from './loaders/loadCommands.js';
 import {sequelize} from './database.js';
 import 'dotenv/config';
+import { loadEvents } from './loaders/loadEvents.js';
 import { loadInteractions } from './loaders/loadInteractions.js';
 const intents = new IntentsBitField(process.env.INTENTS_BIT_FIELD);
 const bot = new Client({intents});
@@ -19,7 +20,9 @@ bot.commands = new Collection();
 const rest = new REST().setToken(process.env.TOKEN);
 
 (async () => {
+    await loadInteractions(bot);
     await loadCommands(bot);
+    await loadEvents(bot);
     try {
         const commands = [...bot.commands.values()].map(command => {
             return command.data.toJSON();
@@ -34,7 +37,6 @@ const rest = new REST().setToken(process.env.TOKEN);
     }
 })();
 
-await loadInteractions(bot);
 
 
 await bot.login(process.env.TOKEN);

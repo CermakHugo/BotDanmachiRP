@@ -1,28 +1,27 @@
-import {Events, MessageFlags} from 'discord.js'
+import { readdirSync } from "fs";
 
-export const loadInteractions = async (bot) => {
-    bot.on(Events.InteractionCreate, async (interaction) => {
-        if (!interaction.isChatInputCommand()) return;
-        const command = interaction.client.commands.get(interaction.commandName);
-        if (!command) {
-            console.error(`No command matching ${interaction.commandName} was found.`);
-            return;
+export const loadInteractions =  async (bot) => {
+  const categories = ["modals", "select_menus", "buttons"];
+  bot.interactions = []; // On utilise un tableau pour stocker tous les modules d'interaction
+
+  for (const category of categories) {
+    const interactionsPath = `./interactions/${category}`
+    const files = readdirSync(interactionsPath).filter(file => file.endsWith(".js"));
+    for (const file of files) {
+      try {
+        const filePath = `../interactions/${category}/${file}`;
+        const interactionModule = await import(filePath);
+        const interaction = interactionModule.default || interactionModule;
+        if (interaction && (interaction.customId || interaction.pattern)) {
+          console.log(`✅ Interaction ajoutée : ${file}`);
+          await bot.interactions.push(interaction);
+        } else {
+          console.warn(`⚠️ Interaction was ignored : ${file} (customId or pattern missing)`);
         }
-        try {
-            await command.execute(interaction);
-        } catch (error) {
-            console.error(error);
-            if (interaction.replied || interaction.deferred) {
-                await interaction.followUp({
-                    content: 'There was an error while executing this command!',
-                    flags: MessageFlags.Ephemeral,
-                });
-            } else {
-                await interaction.reply({
-                    content: 'There was an error while executing this command!',
-                    flags: MessageFlags.Ephemeral,
-                });
-            }
-        }
-    });
-}
+      } catch (err) {
+        console.error(`❌ Error during load of ${file}:`, err);
+      }
+    }
+  }
+  console.log(`✅ ${bot.interactions.length} interactions loaded.`);
+};

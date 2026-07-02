@@ -3,11 +3,11 @@ import 'dotenv/config';
 
 // Option 3: Passing parameters separately (other dialects)
 export const sequelize = new Sequelize(
-    process.env.DATABASE, 
+    process.env.DB_NAME, 
     process.env.DATABASE_USERNAME, 
-    process.env.DATABASE_USERNAME, 
+    process.env.DATABASE_PASSWORD, 
     {
-        host: 'localhost',
+        host: `${process.env.DATABASE}`,
         dialect: 'mysql'
     });
 
