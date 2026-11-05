@@ -1,5 +1,5 @@
 import { DataTypes } from "sequelize";
-import { sequelize } from "../../database/db.js";
+import { sequelize } from "../../database.js"
 import { Status } from "../status/StatusModel.js";
 import { PendingStats } from "../pendingStats/PendingStatsModel.js";
 import { Magic } from "../magic/MagicModel.js";
@@ -78,6 +78,18 @@ export const Character = sequelize.define("Character", {
     defaultValue: false,
   },
 
+  lastDamageAt:{
+    type:DataTypes.DATE,
+    allowNull: true,
+    defaultValue: null,
+  },
+
+  lastHealAt:{
+    type:DataTypes.DATE,
+    allowNull: true,
+    defaultValue: null,
+  },
+  // Autres champs si nécessaire...
 }, {
   tableName: "Characters",
 });
@@ -122,8 +134,95 @@ Character.hasMany(Capacity, {
   }
 );
 
+Character.belongsToMany(Monster, { through: "CharacterKnowledgeMonster" });
+Monster.belongsToMany(Character, { through: "CharacterKnowledgeMonster" });
+
+async function ensureUserIdColumnExists() {
+  const queryInterface = sequelize.getQueryInterface();
+  let tableDescription;
+
+  try {
+    tableDescription = await queryInterface.describeTable("Characters");
+  } catch (error) {
+    // Table inexistante (nouvelle base) : sync() la creera avec la bonne structure
+    return;
+  }
+
+  if (tableDescription.userId) {
+    return;
+  }
+
+  try {
+    await queryInterface.addColumn("Characters", "userId", {
+      type: DataTypes.STRING,
+      allowNull: true,
+    });
+
+    // Copier l'ID utilisateur depuis characterId pour les anciens enregistrements
+    await sequelize.query(
+      "UPDATE `Characters` SET `userId` = `characterId` WHERE `userId` IS NULL OR `userId` = ''"
+    );
+
+    await queryInterface.changeColumn("Characters", "userId", {
+      type: DataTypes.STRING,
+      allowNull: false,
+    });
+
+    await queryInterface.addIndex("Characters", ["userId"], {
+      unique: true,
+      name: "characters_userId_unique",
+    });
+  } catch (error) {
+    console.error("[CharacterModel] Impossible d'ajouter la colonne userId :", error);
+  }
+}
+
+async function removeLegacyEquipmentColumns() {
+  const queryInterface = sequelize.getQueryInterface();
+  let tableDescription;
+
+  try {
+    tableDescription = await queryInterface.describeTable("Characters");
+  } catch (error) {
+    return;
+  }
+
+  try {
+    if (tableDescription.equippedWeaponId) {
+      await queryInterface.removeColumn("Characters", "equippedWeaponId");
+    }
+
+    if (tableDescription.equippedArmorId) {
+      await queryInterface.removeColumn("Characters", "equippedArmorId");
+    }
+
+    if (tableDescription.startingWeapon) {
+      await queryInterface.removeColumn("Characters", "startingWeapon");
+    }
+
+    if (tableDescription.startingArmor) {
+      await queryInterface.removeColumn("Characters", "startingArmor");
+    }
+
+    if (tableDescription.heavyArmorAllowed) {
+      await queryInterface.removeColumn("Characters", "heavyArmorAllowed");
+    }
+  } catch (error) {
+    console.error("[CharacterModel] Impossible de supprimer les colonnes legacy d'equipement :", error);
+  }
+}
+
+Character.beforeValidate((character) => {
+  if (!character.characterId && character.userId) {
+    character.characterId = character.userId;
+  }
+});
+
+await ensureUserIdColumnExists();
+await removeLegacyEquipmentColumns();
 await Character.sync();
 
-//console.log(Object.getOwnPropertyNames(Object.getPrototypeOf(Character.build())));
+
+console.log(Object.getOwnPropertyNames(Object.getPrototypeOf(Character.build())));
 
 export default Character

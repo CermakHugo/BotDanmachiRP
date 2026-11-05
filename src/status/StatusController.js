@@ -1,6 +1,7 @@
 import * as StatusService from "./StatusService.js";
 import * as StatusView from "./StatusView.js"
 import * as GodHandler from "../../handlers/godHandler.js"
+import * as CharacterService from "../character/CharacterService.js"
 
 export async function createNewStatus(character) {
   return await StatusService.createStatus(character);
@@ -32,3 +33,39 @@ export async function getAllStats(character) {
 }
 
 
+
+
+function reply(interaction, payload) {
+  if (interaction.deferred || interaction.replied) {
+    return interaction.editReply(payload);
+  }
+  return interaction.reply(payload);
+}
+
+export async function showCharacterStats(interaction) {
+  const targetUser = interaction.options.getUser("joueur") || interaction.user;
+  const isSelf = targetUser.id === interaction.user.id;
+
+  const character = await CharacterService.getCharacterByUserId(targetUser.id);
+  if (!character) {
+    return reply(interaction, { content: "Ce joueur n'a pas de personnage.", ephemeral: true });
+  }
+
+  const status = await StatusService.getLatestStatusForCharacter(character);
+  if (!status) {
+    return reply(interaction, { content: "Statut introuvable pour ce personnage.", ephemeral: true });
+  }
+
+  const payload = StatusService.buildCharacterStatsPayload({
+    character,
+    status,
+    isSelf,
+    discordClient: interaction.client,
+    viewerId: interaction.user.id,
+    targetUser,
+  });
+
+  const message = StatusView.buildCharacterStatsEmbed(payload);
+  message.ephemeral = isSelf;
+  return reply(interaction, message);
+}

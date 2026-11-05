@@ -8,10 +8,10 @@ const intents = new IntentsBitField(process.env.INTENTS_BIT_FIELD);
 const bot = new Client({intents});
 
 try {
-  await sequelize.authenticate();
-  console.log('Connection has been established successfully.');
+    await sequelize.authenticate();
+    console.log('Connection has been established successfully.');
 } catch (error) {
-  console.error('Unable to connect to the database:', error);
+    console.error('Unable to connect to the database:', error);
 }
 
 bot.commands = new Collection();
@@ -41,6 +41,6 @@ const rest = new REST().setToken(process.env.TOKEN);
 
 await bot.login(process.env.TOKEN);
 
-bot.on('ready', async () => {
+bot.on('clientReady', async () => {
     console.log(`${bot.user.username} est en ligne.`)
 })

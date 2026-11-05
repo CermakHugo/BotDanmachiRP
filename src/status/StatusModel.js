@@ -1,6 +1,6 @@
 // src/database/stats.js
 import { DataTypes } from "sequelize";
-import { sequelize } from "../../database/db.js";
+import { sequelize } from "../../database.js"
 
 export const Status = sequelize.define("Statuses", {
   idStatus : {
@@ -32,7 +32,34 @@ export const Status = sequelize.define("Statuses", {
   dexterity: { 
     type: DataTypes.INTEGER, 
     defaultValue: 50 
-  }, 
+  },
+
+
+  strengthRank: { 
+    type: DataTypes.STRING, 
+    defaultValue: 50 
+  },
+
+  agilityRank: { 
+    type: DataTypes.STRING, 
+    defaultValue: 50 
+  },
+
+  enduranceRank: { 
+    type: DataTypes.STRING, 
+    defaultValue: 50
+  },
+
+  intelligenceRank: { 
+    type: DataTypes.STRING, 
+    defaultValue: 50 
+  },
+
+  dexterityRank: { 
+    type: DataTypes.STRING, 
+    defaultValue: 50 
+  },
+   
   level: {
     type: DataTypes.INTEGER, 
     defaultValue : 1

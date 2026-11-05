@@ -9,12 +9,6 @@ Character.beforeCreate((character) => {
     }
 });
 
-Character.beforeValidate((character) => {
-  if (!character.characterId && character.userId) {
-    character.characterId = character.userId;
-  }
-});
-
 Character.afterCreate(async (character, options) => {
     // Exige que calculatedStats soit fourni dans les options
     const status = options.status;
@@ -119,6 +113,16 @@ export async function IsExisted(idCharacter){
     return this.findCharacterById(idCharacter)
 }
 
+export async function learnAboutMonster(character, monster){
+    try{
+        const queryResponse = await character.addMonster(monster)
+        console.log(`${character.name} has learn about ${monster.name}`)
+        return queryResponse
+    } catch(e){
+        console.log(`Une erreur est survenu lors de l'ajout d'une ligne dans CharacterKnowledgeMonster : ${e}`);
+        return;
+    }
+}
 
 export async function getLastStatus(character) {
     try {

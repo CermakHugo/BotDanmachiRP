@@ -1,0 +1,176 @@
+/*
+ * Met à jour l'embed pour passer en mode exploration tout en gardant le résumé final.
+ * Les boutons d'exploration sont affichés, mais l'embed final reste visible.
+ 
+async function switchToExplorationEmbed(interaction, finalText, combatState, character) {
+  // Ici, on ne supprime PAS l'état de l'interaction afin de permettre la reprise d'exploration.
+  // On conserve l'embed final et on remplace simplement les boutons par ceux d'exploration.
+  const embed = combatState.lastEmbed || {
+    title: "Combat terminé",
+    description: finalText
+  };
+
+  // Met à jour le champ "Détails de l'action"
+  if (embed.fields) {
+    const detailsField = embed.fields.find(f => f.name === "Détails de l'action");
+    if (detailsField) {
+      detailsField.value = finalText;
+    } else {
+      embed.fields.push({ name: "Détails de l'action", value: finalText });
+    }
+  } else {
+    embed.fields = [{ name: "Détails de l'action", value: finalText }];
+  }
+  // Optionnel : mettre à jour le titre
+  embed.title = "Combat terminé";
+
+  // Générer les boutons d'exploration
+  const row = getExplorationRow(interaction.user.id, character.floor);
+
+  // Met à jour le message sans supprimer l'embed final
+  await updateMessageAndState(interaction, combatState.message, embed, row, combatState);
+}
+
+function createButton(buttonId, label, style){
+  return new ButtonBuilder()
+        .setCustomId(buttonId)
+        .setLabel(label)
+        .setStyle(style)
+}
+
+export async function resolveCombatAction(
+  interaction,
+  userActionText,
+  chosenStats,
+  actionName,
+  originalMessage,
+  combatState
+) {
+  const userId = interaction.user.id;
+  const character = await Character.findOne({ where: { userId } });
+  if (!character) return "❌ Personnage introuvable.";
+
+  const statsRecord = await Stats.findOne({ where: { characterId: character.userId } });
+  if (!statsRecord) return "❌ Stats introuvables.";
+  if (!combatState?.monster) return "❌ Monstre introuvable.";
+  if (!combatState.actionLog) combatState.actionLog = [];
+
+  // 1) Consommation de stamina
+  const baseStaminaCost = 10;
+  const agility = statsRecord.agility || 0;
+  const endurance = statsRecord.endurance || 0;
+  const reduction = Math.floor((agility + endurance) / 20);
+  const effectiveStaminaCost = Math.max(baseStaminaCost - reduction, 1);
+
+  if (statsRecord.stamina < effectiveStaminaCost) {
+    return "❌ Pas assez de stamina pour effectuer cette action.";
+  }
+  statsRecord.stamina -= effectiveStaminaCost;
+  await statsRecord.save();
+
+  // 2) Attaque du joueur
+  const { totalDamage, outcomeText, statGains } = calculatePlayerOutcome(
+    statsRecord,
+    chosenStats,
+    combatState.monster,
+    userActionText
+  );
+  let finalDetails = outcomeText;
+
+  // 3) Gains en PendingStats
+  const pendingStatsRecord = await PendingStats.findOne({ where: { characterId: character.userId} });
+  if (pendingStatsRecord && statGains) {
+    chosenStats.forEach((stat, i) => {
+      const bonus = statGains[i];
+      if (["strength", "agility", "endurance", "dexterity", "intelligence"].includes(stat)) {
+        const field = "pending" + stat.charAt(0).toUpperCase() + stat.slice(1) + "Bonus";
+        pendingStatsRecord[field] = (pendingStatsRecord[field] || 0) + bonus;
+      } else if (stat === "mana") {
+        pendingStatsRecord.pendingMaxMana = (pendingStatsRecord.pendingMaxMana || 0) + bonus;
+      } else if (stat === "stamina") {
+        pendingStatsRecord.pendingMaxStamina = (pendingStatsRecord.pendingMaxStamina || 0) + bonus;
+      }
+    });
+    await pendingStatsRecord.save();
+  }
+
+  // 4) Appliquer l'attaque au monstre
+  combatState.monster.hp -= totalDamage;
+  if (combatState.monster.hp < 0) combatState.monster.hp = 0;
+  combatState.actionLog.push(`Action : ${actionName} - "${userActionText}" => -${totalDamage} PV au monstre.`);
+
+  // 7) Vérifier la mort du monstre et distribuer le loot
+  if (combatState.monster.hp <= 0) {
+    // Générer le loot du monstre
+    const lootList = await generateMonsterLootList(combatState.monster);
+    // Si aucun loot n'est généré, attribuer par défaut des Crystal Shard
+    if (lootList.length === 0) {
+      const monsterDiff = combatState.monster.difficulty || 1;
+      const shardsGained = Math.floor(Math.random() * (3 * monsterDiff)) + monsterDiff;
+      lootList.push({
+        type: "item",
+        name: "Crystal Shard",
+        quantity: shardsGained,
+        data: { baseSize: 1 }
+      });
+    }
+    // Déterminer la liste des participants (pour le multi, stockée dans combatState.participantIds)
+    const participantIds = combatState.participantIds || [interaction.user.id];
+    // Distribuer le loot à chaque participant
+    await distributeCombatLoot(participantIds, lootList, {
+      monsterName: combatState?.monster?.name ?? null,
+      floor: character?.floor ?? 0,
+    });
+
+    finalDetails += `\n🎉 Le monstre est vaincu ! Loot distribué aux participants.`;
+    combatState.actionLog.push(`Victoire ! Loot distribué aux participants.`);
+    finalDetails = trimToSentence(finalDetails, 250);
+
+    // Passage en exploration
+    await switchToExplorationEmbed(interaction, finalDetails, combatState, character);
+    return finalDetails;
+  }
+
+  // 9) Narration IA
+  const godKey = character.familia?.toLowerCase() || "hestia";
+  const prompt = `Action: ${actionName} - ${userActionText}\nHP monstre: ${combatState.monster.hp}\nNarration épique.`;
+  const rawNarration = await generateGodResponse(userId, godKey, prompt, 120);
+
+  // 10) Préparer le journal des actions
+  const maxLogEntries = 6;
+  const logEntries = combatState.actionLog.slice(-maxLogEntries);
+  const actionLogText = logEntries.map(e => `- ${e}`).join("\n");
+
+  // 11) Construction de l'embed
+  const playerStatsString = `HP: ${statsRecord.health}\nSTR: ${statsRecord.strength}\nEND: ${statsRecord.endurance}\nAGI: ${statsRecord.agility}\nDEX: ${statsRecord.dexterity}\nINT: ${statsRecord.intelligence}`;
+  const monsterStatsString = `HP: ${combatState.monster.hp}\nATK: ${combatState.monster.attack}\nDEF: ${combatState.monster.defense || 0}\nSPD: ${combatState.monster.speed || 0}`;
+
+  const embed = {
+    title: `Combat en cours - Action: ${actionName}`,
+    fields: [
+      { name: "Narration", value: rawNarration || "—" },
+      { name: "Détails de l'action", value: finalDetails || "—" },
+      { name: "Stats du joueur", value: playerStatsString, inline: true },
+      { name: "Stats du monstre", value: monsterStatsString, inline: true },
+      { name: "Dernières actions", value: actionLogText || "Aucun log" },
+    ],
+    thumbnail: { url: combatState.monster.image || "https://example.com/monster_encounter.png" },
+    footer: { text: `Mise à jour : ${new Date().toLocaleTimeString()}` }
+  };
+
+  combatState.lastEmbed = embed;
+
+  // 12) Boutons de combat (monstre encore en vie)
+  const combatRow = await getCombatButtons(userId);
+
+  if (!interaction.deferred && !interaction.replied) {
+    await interaction.deferReply({ ephemeral: false }); 
+  }
+
+  await interaction.editReply({
+    embeds: [embed],
+    components: [combatRow]
+  });
+
+  return finalDetails;
+} */
